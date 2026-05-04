@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+dashboard/.env
+*.zip
+agent_proxy_deps/
+powerpoint-env/
+.aws-sam/
+*.pptx
+.playwright-mcp/
