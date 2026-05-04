@@ -2,9 +2,9 @@
 
 ## Dashboard URL
 
-**Gradio (App Runner):** https://fpxybbyznx.us-east-1.awsapprunner.com
+**Streamlit Cloud:** https://agentdedup-dashboard-h4cbtgytg59pvuowqerkey.streamlit.app/
 
-**Streamlit (local):** http://localhost:8501 (run `streamlit run dashboard/app.py`)
+**Local (backup):** http://localhost:8501 (run `cd dashboard && streamlit run app.py`)
 
 ---
 
@@ -61,7 +61,7 @@ This seeds 22 person + 5 organization records and clears all previous reviews.
 |-------|-------|
 | Party Name | Acme Corp International |
 | Tax Registration | TAX-ACME-9999 |
-| Match Market | US-TECHNOLOGY |
+| Match Market | US-RETAIL |
 | Source System | OneCRM |
 
 **Expected:** Green banner — "New organization record created!"
