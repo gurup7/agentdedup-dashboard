@@ -683,6 +683,7 @@ with tab_reviews:
                         st.markdown(f"**Match Market:** {incoming.get('matchMarket', 'N/A') or 'N/A'}")
                         st.markdown(f"**Address:** {format_address(incoming.get('address'))}")
                         st.markdown(f"**Source:** {incoming.get('sourceSystem', 'N/A')}")
+                        st.markdown(f"**Created:** {incoming.get('createdAt', 'N/A')[:10] if incoming.get('createdAt') else 'N/A'}")
 
                     with right:
                         st.markdown("**📄 Matched Organization**")
@@ -693,6 +694,7 @@ with tab_reviews:
                         st.markdown(f"**Match Market:** {matched.get('matchMarket', 'N/A') or 'N/A'}")
                         st.markdown(f"**Address:** {format_address(matched.get('address'))}")
                         st.markdown(f"**Source:** {matched.get('sourceSystem', 'N/A')}")
+                        st.markdown(f"**Created:** {matched.get('createdAt', 'N/A')[:10] if matched.get('createdAt') else 'N/A'}")
                         if matched.get("customerId"):
                             st.caption(f"ID: {matched['customerId']}")
                 else:
@@ -704,6 +706,7 @@ with tab_reviews:
                         st.markdown(f"**DOB:** {incoming.get('dateOfBirth', 'N/A') or 'N/A'}")
                         st.markdown(f"**Address:** {format_address(incoming.get('address'))}")
                         st.markdown(f"**Source:** {incoming.get('sourceSystem', 'N/A')}")
+                        st.markdown(f"**Created:** {incoming.get('createdAt', 'N/A')[:10] if incoming.get('createdAt') else 'N/A'}")
 
                     with right:
                         st.markdown("**📄 Matched Record**")
@@ -713,6 +716,7 @@ with tab_reviews:
                         st.markdown(f"**DOB:** {matched.get('dateOfBirth', 'N/A') or 'N/A'}")
                         st.markdown(f"**Address:** {format_address(matched.get('address'))}")
                         st.markdown(f"**Source:** {matched.get('sourceSystem', 'N/A')}")
+                        st.markdown(f"**Created:** {matched.get('createdAt', 'N/A')[:10] if matched.get('createdAt') else 'N/A'}")
                         if matched.get("customerId"):
                             st.caption(f"ID: {matched['customerId']}")
 
