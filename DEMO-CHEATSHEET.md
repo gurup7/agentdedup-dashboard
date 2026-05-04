@@ -2,7 +2,9 @@
 
 ## Dashboard URL
 
-**http://agentdedup-alb-1225486980.us-east-1.elb.amazonaws.com**
+**Gradio (App Runner):** https://fpxybbyznx.us-east-1.awsapprunner.com
+
+**Streamlit (local):** http://localhost:8501 (run `streamlit run dashboard/app.py`)
 
 ---
 
