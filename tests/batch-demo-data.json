@@ -1,0 +1,47 @@
+[
+  {
+    "firstName": "Robert",
+    "lastName": "Smith",
+    "email": "robert.smith@sampledomain.org",
+    "phone": "+15552223099",
+    "dateOfBirth": "1978-11-30",
+    "address": {"street": "42 Pine Rd", "city": "Denver", "state": "CO", "postalCode": "80201", "country": "US"},
+    "sourceSystem": "NES"
+  },
+  {
+    "firstName": "Sara",
+    "lastName": "Connor",
+    "email": "sara.connor@newdomain.com",
+    "phone": "+15554445002",
+    "dateOfBirth": "1988-09-05",
+    "address": {"street": "77 Elm Blvd", "city": "Seattle", "state": "WA", "postalCode": "98101", "country": "US"},
+    "sourceSystem": "OneCRM"
+  },
+  {
+    "firstName": "Zara",
+    "lastName": "Mitchell",
+    "email": "zara.mitchell@brandnew.com",
+    "phone": "+14085551234",
+    "dateOfBirth": "2000-01-15",
+    "address": {"street": "500 Innovation Dr", "city": "San Jose", "state": "CA", "postalCode": "95101", "country": "US"},
+    "sourceSystem": "NES"
+  },
+  {
+    "firstName": "Jams",
+    "lastName": "Wilson",
+    "email": "james.wilson@demomail.com",
+    "phone": "+15553334001",
+    "dateOfBirth": "1992-05-10",
+    "address": {"street": "88 Birch Lane", "city": "Portland", "state": "OR", "postalCode": "97201", "country": "US"},
+    "sourceSystem": "NES"
+  },
+  {
+    "firstName": "Olivia",
+    "lastName": "Park",
+    "email": "olivia.park@freshmail.com",
+    "phone": "+12125559876",
+    "dateOfBirth": "1993-11-22",
+    "address": {"street": "200 Broadway", "city": "New York", "state": "NY", "postalCode": "10001", "country": "US"},
+    "sourceSystem": "OneCRM"
+  }
+]

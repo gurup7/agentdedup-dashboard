@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  CloudWatch Log Groups for Customer Data Deduplication Prototype.
+  Creates separate log groups for Intercept Agent, Clean Agent, and Lambda tools
+  with 30-day retention for prototype use.
+
+Resources:
+  # --- Intercept Agent log group ---
+  InterceptAgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/agentcore/intercept-agent
+      RetentionInDays: 30
+    DeletionPolicy: Delete
+
+  # --- Clean Agent log group ---
+  CleanAgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/agentcore/clean-agent
+      RetentionInDays: 30
+    DeletionPolicy: Delete
+
+  # --- Lambda tools log group ---
+  LambdaToolsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/dedup-tools
+      RetentionInDays: 30
+    DeletionPolicy: Delete
+
+Outputs:
+  InterceptAgentLogGroupArn:
+    Description: ARN of the Intercept Agent log group
+    Value: !GetAtt InterceptAgentLogGroup.Arn
+
+  CleanAgentLogGroupArn:
+    Description: ARN of the Clean Agent log group
+    Value: !GetAtt CleanAgentLogGroup.Arn
+
+  LambdaToolsLogGroupArn:
+    Description: ARN of the Lambda tools log group
+    Value: !GetAtt LambdaToolsLogGroup.Arn

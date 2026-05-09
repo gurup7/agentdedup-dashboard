@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Customer Data Deduplication - DynamoDB Tables
+  CustomerTable simulates Oracle EBS TCA (HZ_PARTIES).
+  ReviewQueue stores pending merge candidates for human review.
+
+Resources:
+  CustomerTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-CustomerTable'
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: customerId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+        - AttributeName: phone
+          AttributeType: S
+        - AttributeName: postalCode
+          AttributeType: S
+        - AttributeName: lastName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: customerId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: PhoneIndex
+          KeySchema:
+            - AttributeName: phone
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: PostalCodeLastNameIndex
+          KeySchema:
+            - AttributeName: postalCode
+              KeyType: HASH
+            - AttributeName: lastName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  ReviewQueue:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-ReviewQueue'
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: reviewId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: reviewId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  SiteTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-SiteTable'
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: siteId
+          AttributeType: S
+        - AttributeName: accountNumber
+          AttributeType: S
+        - AttributeName: siteNumber
+          AttributeType: S
+        - AttributeName: postalCode
+          AttributeType: S
+      KeySchema:
+        - AttributeName: siteId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: AccountNumberIndex
+          KeySchema:
+            - AttributeName: accountNumber
+              KeyType: HASH
+            - AttributeName: siteNumber
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: PostalCodeIndex
+          KeySchema:
+            - AttributeName: postalCode
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+Outputs:
+  CustomerTableName:
+    Description: Name of the CustomerTable (simulates Oracle EBS TCA)
+    Value: !Ref CustomerTable
+    Export:
+      Name: !Sub '${AWS::StackName}-CustomerTableName'
+
+  CustomerTableArn:
+    Description: ARN of the CustomerTable
+    Value: !GetAtt CustomerTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CustomerTableArn'
+
+  ReviewQueueName:
+    Description: Name of the ReviewQueue table
+    Value: !Ref ReviewQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-ReviewQueueName'
+
+  ReviewQueueArn:
+    Description: ARN of the ReviewQueue table
+    Value: !GetAtt ReviewQueue.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ReviewQueueArn'
+
+  SiteTableName:
+    Description: Name of the SiteTable (simulates Oracle EBS TCA HZ_PARTY_SITES)
+    Value: !Ref SiteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-SiteTableName'
+
+  SiteTableArn:
+    Description: ARN of the SiteTable
+    Value: !GetAtt SiteTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SiteTableArn'

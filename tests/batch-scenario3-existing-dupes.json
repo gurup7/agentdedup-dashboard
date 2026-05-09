@@ -1,0 +1,73 @@
+[
+  {
+    "customerId": "c001-aaaa-1111-bbbb-000000000002",
+    "firstName": "Chris",
+    "lastName": "James",
+    "email": "chris.james@fakecorp.com",
+    "phone": "+15551234099",
+    "dateOfBirth": "1985-03-15",
+    "address": {"street": "100 Maple Ave", "city": "Springfield", "state": "IL", "postalCode": "62701", "country": "US"},
+    "sourceSystem": "NES"
+  },
+  {
+    "customerId": "c001-aaaa-1111-bbbb-000000000007",
+    "firstName": "Chrish",
+    "lastName": "James",
+    "email": "chrish.james@fakecorp.com",
+    "phone": "+15551234050",
+    "dateOfBirth": "1985-03-15",
+    "address": {"street": "100 Maple Ave", "city": "Springfield", "state": "IL", "postalCode": "62701", "country": "US"},
+    "sourceSystem": "NES"
+  },
+  {
+    "customerId": "c001-aaaa-1111-bbbb-000000000004",
+    "firstName": "Maria",
+    "lastName": "Garcia",
+    "email": "m.garcia@testmail.net",
+    "phone": "+15559876001",
+    "dateOfBirth": "1990-07-22",
+    "address": {"street": "250 Oak Street", "city": "Austin", "state": "TX", "postalCode": "73301", "country": "US"},
+    "sourceSystem": "NES"
+  },
+  {
+    "customerId": "c001-aaaa-1111-bbbb-000000000010",
+    "firstName": "Robert",
+    "lastName": "Smyth",
+    "email": "rob.smyth@sampledomain.org",
+    "phone": "+15552223010",
+    "dateOfBirth": "1978-11-30",
+    "address": {"street": "42 Pine Rd", "city": "Denver", "state": "CO", "postalCode": "80201", "country": "US"},
+    "sourceSystem": "OneCRM"
+  },
+  {
+    "firstName": "Rajesh",
+    "lastName": "Kumar",
+    "email": "rajesh.kumar@newcustomer.com",
+    "phone": "+14085559999",
+    "dateOfBirth": "1995-08-10",
+    "address": {"street": "100 Tech Park Dr", "city": "San Jose", "state": "CA", "postalCode": "95101", "country": "US"},
+    "sourceSystem": "NES"
+  },
+  {
+    "customerId": "org-aaaa-1111-bbbb-000000000002",
+    "partyType": "ORGANIZATION",
+    "partyName": "Pearson Education",
+    "address": {"street": "221 River Street", "city": "Hoboken", "state": "NJ", "postalCode": "07030", "country": "US"},
+    "taxRegistrationNum": "TAX-PE-2024-001",
+    "taxpayerId": "TP-84-1234567",
+    "mdrPidId": "MDR-PE-0001",
+    "matchMarket": "US-EDUCATION",
+    "sourceSystem": "NES"
+  },
+  {
+    "customerId": "org-aaaa-1111-bbbb-000000000004",
+    "partyType": "ORGANIZATION",
+    "partyName": "Pearson Edu",
+    "address": {"street": "221 River St", "city": "Hoboken", "state": "NJ", "postalCode": "07030", "country": "US"},
+    "taxRegistrationNum": "TAX-PE-2024-002",
+    "taxpayerId": "TP-84-1234567",
+    "mdrPidId": "MDR-PE-0002",
+    "matchMarket": "US-EDUCATION",
+    "sourceSystem": "NES"
+  }
+]

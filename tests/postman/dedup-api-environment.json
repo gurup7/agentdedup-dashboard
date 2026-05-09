@@ -1,0 +1,49 @@
+{
+  "id": "dedup-api-env",
+  "name": "Dedup API - Prototype",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/prod",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "apiKey",
+      "value": "YOUR_API_KEY_HERE",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "awsRegion",
+      "value": "us-east-1",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "awsAccountId",
+      "value": "123456789012",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "reviewId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "newCustomerId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "batchExecutionArn",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}

@@ -1,0 +1,425 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Customer Data Deduplication - KMS Key and IAM Roles
+  Customer-managed KMS key and least-privilege IAM execution roles
+  for all Lambda tools, Step Functions, and API Gateway.
+
+Parameters:
+  CustomerTableArn:
+    Type: String
+    Description: ARN of the CustomerTable DynamoDB table
+
+  ReviewQueueArn:
+    Type: String
+    Description: ARN of the ReviewQueue DynamoDB table
+
+  AuditLogsBucketArn:
+    Type: String
+    Description: ARN of the audit logs S3 bucket
+
+  AgentCoreArn:
+    Type: String
+    Description: ARN of the AgentCore agent for Step Functions invocation
+    Default: ''
+
+  StepFunctionsArn:
+    Type: String
+    Description: ARN of the Step Functions state machine for API Gateway
+    Default: ''
+
+Resources:
+  # ---------------------------------------------------------------
+  # KMS Customer-Managed Key
+  # ---------------------------------------------------------------
+  DedupCMK:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Customer-managed key for deduplication data encryption
+      Enabled: true
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccountFullAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
+  DedupCMKAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/dedup-cmk
+      TargetKeyId: !Ref DedupCMK
+
+  # ---------------------------------------------------------------
+  # IAM Roles - Lambda Tools
+  # ---------------------------------------------------------------
+
+  QueryCustomerToolRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-QueryCustomerToolRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: QueryCustomerTablePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Query'
+                  - 'dynamodb:GetItem'
+                Resource:
+                  - !Ref CustomerTableArn
+                  - !Sub '${CustomerTableArn}/index/*'
+
+  CreateCustomerToolRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CreateCustomerToolRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CreateCustomerTablePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                Resource:
+                  - !Ref CustomerTableArn
+
+  MergeCustomerToolRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-MergeCustomerToolRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: MergeCustomerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:UpdateItem'
+                Resource:
+                  - !Ref CustomerTableArn
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:UpdateItem'
+                Resource:
+                  - !Ref ReviewQueueArn
+
+  RuleBasedMatchToolRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-RuleBasedMatchToolRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  LLMMatchToolRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-LLMMatchToolRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvokeModelPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'bedrock:InvokeModel'
+                Resource: '*'
+
+  WriteReviewToolRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-WriteReviewToolRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: WriteReviewQueuePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                Resource:
+                  - !Ref ReviewQueueArn
+
+  WriteAuditLogToolRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-WriteAuditLogToolRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: WriteAuditLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource:
+                  - !Sub '${AuditLogsBucketArn}/*'
+
+  GetReviewsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-GetReviewsRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: QueryReviewQueuePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Query'
+                  - 'dynamodb:GetItem'
+                Resource:
+                  - !Ref ReviewQueueArn
+                  - !Sub '${ReviewQueueArn}/index/*'
+
+  # ---------------------------------------------------------------
+  # IAM Roles - Step Functions and API Gateway
+  # ---------------------------------------------------------------
+
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-StepFunctionsRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: InvokeAgentCorePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'bedrock:InvokeAgent'
+                Resource: !If
+                  - HasAgentCoreArn
+                  - !Ref AgentCoreArn
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent/*'
+        - PolicyName: InvokeLambdaProxyPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource:
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*'
+        - PolicyName: S3BatchReportsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::*-dedup-batch-input/*'
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::*-dedup-batch-reports/*'
+
+  ApiGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-ApiGatewayRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StartStepFunctionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'states:StartExecution'
+                  - 'states:StartSyncExecution'
+                Resource: !If
+                  - HasStepFunctionsArn
+                  - !Ref StepFunctionsArn
+                  - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:*'
+        - PolicyName: InvokeLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource:
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*'
+
+Conditions:
+  HasAgentCoreArn: !Not
+    - !Equals
+      - !Ref AgentCoreArn
+      - ''
+  HasStepFunctionsArn: !Not
+    - !Equals
+      - !Ref StepFunctionsArn
+      - ''
+
+# ---------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------
+Outputs:
+  DedupCMKArn:
+    Description: ARN of the customer-managed KMS key
+    Value: !GetAtt DedupCMK.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DedupCMKArn'
+
+  DedupCMKKeyId:
+    Description: Key ID of the customer-managed KMS key
+    Value: !Ref DedupCMK
+    Export:
+      Name: !Sub '${AWS::StackName}-DedupCMKKeyId'
+
+  QueryCustomerToolRoleArn:
+    Description: ARN of the QueryCustomerTool Lambda execution role
+    Value: !GetAtt QueryCustomerToolRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-QueryCustomerToolRoleArn'
+
+  CreateCustomerToolRoleArn:
+    Description: ARN of the CreateCustomerTool Lambda execution role
+    Value: !GetAtt CreateCustomerToolRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CreateCustomerToolRoleArn'
+
+  MergeCustomerToolRoleArn:
+    Description: ARN of the MergeCustomerTool Lambda execution role
+    Value: !GetAtt MergeCustomerToolRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-MergeCustomerToolRoleArn'
+
+  RuleBasedMatchToolRoleArn:
+    Description: ARN of the RuleBasedMatchTool Lambda execution role
+    Value: !GetAtt RuleBasedMatchToolRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RuleBasedMatchToolRoleArn'
+
+  LLMMatchToolRoleArn:
+    Description: ARN of the LLMMatchTool Lambda execution role
+    Value: !GetAtt LLMMatchToolRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LLMMatchToolRoleArn'
+
+  WriteReviewToolRoleArn:
+    Description: ARN of the WriteReviewTool Lambda execution role
+    Value: !GetAtt WriteReviewToolRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WriteReviewToolRoleArn'
+
+  WriteAuditLogToolRoleArn:
+    Description: ARN of the WriteAuditLogTool Lambda execution role
+    Value: !GetAtt WriteAuditLogToolRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WriteAuditLogToolRoleArn'
+
+  GetReviewsRoleArn:
+    Description: ARN of the GetReviews Lambda execution role
+    Value: !GetAtt GetReviewsRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-GetReviewsRoleArn'
+
+  StepFunctionsRoleArn:
+    Description: ARN of the Step Functions execution role
+    Value: !GetAtt StepFunctionsRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-StepFunctionsRoleArn'
+
+  ApiGatewayRoleArn:
+    Description: ARN of the API Gateway execution role
+    Value: !GetAtt ApiGatewayRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayRoleArn'

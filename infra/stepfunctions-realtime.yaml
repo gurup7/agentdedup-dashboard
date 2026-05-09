@@ -1,0 +1,178 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Customer Data Deduplication - Step Functions Express Workflow (Real-Time)
+  Synchronous state machine for real-time record registration, merge approval,
+  and merge rejection via the Intercept Agent on AgentCore Runtime.
+
+Parameters:
+  StepFunctionsRoleArn:
+    Type: String
+    Description: ARN of the IAM role for Step Functions execution
+
+  InterceptAgentLambdaArn:
+    Type: String
+    Description: >
+      ARN of the Lambda proxy that invokes the Intercept Agent
+      (AgentCore Runtime /invocations endpoint). Replace with direct
+      InvokeAgent ARN once AgentCore integration is configured.
+    Default: 'arn:aws:lambda:us-east-1:ACCOUNT_ID:function:intercept-agent-proxy'
+
+Resources:
+  RealtimeStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${AWS::StackName}-dedup-realtime'
+      StateMachineType: EXPRESS
+      RoleArn: !Ref StepFunctionsRoleArn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Real-time dedup workflow — routes register, approve, reject actions to Intercept Agent",
+          "StartAt": "DetermineAction",
+          "TimeoutSeconds": 10,
+          "States": {
+            "DetermineAction": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.action",
+                  "StringEquals": "register",
+                  "Next": "InvokeRegister"
+                },
+                {
+                  "Variable": "$.action",
+                  "StringEquals": "approve",
+                  "Next": "InvokeApprove"
+                },
+                {
+                  "Variable": "$.action",
+                  "StringEquals": "reject",
+                  "Next": "InvokeReject"
+                }
+              ],
+              "Default": "UnknownAction"
+            },
+            "InvokeRegister": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${InterceptAgentLambdaArn}",
+                "Payload": {
+                  "action": "register",
+                  "payload.$": "$.payload"
+                }
+              },
+              "ResultSelector": {
+                "body.$": "$.Payload"
+              },
+              "ResultPath": "$.result",
+              "OutputPath": "$.result.body",
+              "Retry": [
+                {
+                  "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "HandleError",
+                  "ResultPath": "$.error"
+                }
+              ],
+              "End": true
+            },
+            "InvokeApprove": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${InterceptAgentLambdaArn}",
+                "Payload": {
+                  "action": "approve",
+                  "reviewId.$": "$.reviewId"
+                }
+              },
+              "ResultSelector": {
+                "body.$": "$.Payload"
+              },
+              "ResultPath": "$.result",
+              "OutputPath": "$.result.body",
+              "Retry": [
+                {
+                  "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "HandleError",
+                  "ResultPath": "$.error"
+                }
+              ],
+              "End": true
+            },
+            "InvokeReject": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${InterceptAgentLambdaArn}",
+                "Payload": {
+                  "action": "reject",
+                  "reviewId.$": "$.reviewId"
+                }
+              },
+              "ResultSelector": {
+                "body.$": "$.Payload"
+              },
+              "ResultPath": "$.result",
+              "OutputPath": "$.result.body",
+              "Retry": [
+                {
+                  "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "HandleError",
+                  "ResultPath": "$.error"
+                }
+              ],
+              "End": true
+            },
+            "UnknownAction": {
+              "Type": "Fail",
+              "Error": "UnknownAction",
+              "Cause": "The 'action' field must be one of: register, approve, reject"
+            },
+            "HandleError": {
+              "Type": "Pass",
+              "Parameters": {
+                "error": "AgentInvocationFailed",
+                "message": "The Intercept Agent invocation failed. Check CloudWatch logs.",
+                "details.$": "$.error"
+              },
+              "End": true
+            }
+          }
+        }
+
+Outputs:
+  RealtimeStateMachineArn:
+    Description: ARN of the real-time Express state machine
+    Value: !Ref RealtimeStateMachine
+    Export:
+      Name: !Sub '${AWS::StackName}-RealtimeStateMachineArn'
+
+  RealtimeStateMachineName:
+    Description: Name of the real-time Express state machine
+    Value: !GetAtt RealtimeStateMachine.Name
+    Export:
+      Name: !Sub '${AWS::StackName}-RealtimeStateMachineName'

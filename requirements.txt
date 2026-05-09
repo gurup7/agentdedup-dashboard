@@ -1,0 +1,15 @@
+# Customer Data Deduplication Prototype - Shared Python Dependencies
+
+# AWS SDK
+boto3>=1.34.0
+
+# AgentCore agents (FastAPI-based)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.5.0
+
+# String matching / fuzzy matching (RuleBasedMatchTool)
+jellyfish>=1.0.0
+
+# Utilities
+python-dotenv>=1.0.0

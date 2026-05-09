@@ -11,6 +11,7 @@ import re
 import time
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 
 import boto3
 import pandas as pd
@@ -84,6 +85,13 @@ def safe_float(val, default=0.0):
 
 def format_record_name(record):
     """Extract a display name from a customer record dict."""
+    # Site records use accountDescription + addressLine1
+    if record.get("partyType") == "SITE" or record.get("addressLine1"):
+        acct = record.get("accountDescription", "")
+        addr = record.get("addressLine1", "")
+        if acct and addr:
+            return f"{acct} — {addr}"
+        return acct or addr or "Unknown Site"
     # Organization records use partyName
     party_name = record.get("partyName")
     if party_name:
@@ -108,7 +116,13 @@ def format_address(addr):
 
 def get_party_type(record):
     """Return the party type for a record, defaulting to PERSON."""
-    return record.get("partyType", "PERSON").upper()
+    pt = record.get("partyType", "").upper()
+    if pt:
+        return pt
+    # Detect site records by presence of addressLine1 field
+    if record.get("addressLine1") or record.get("siteNumber"):
+        return "SITE"
+    return "PERSON"
 
 
 # ---------------------------------------------------------------------------
@@ -485,8 +499,8 @@ with st.sidebar:
 st.title("🔍 AgentDedup — Customer Data Deduplication")
 st.caption("AI-powered duplicate detection with human-in-the-loop review — Person & Organization")
 
-tab_accounts, tab_reviews, tab_register, tab_batch, tab_dashboard = st.tabs(
-    ["📇 Accounts", "🔀 Duplicate Reviews", "➕ Register Customer", "📦 Batch Scan", "📊 Dashboard"]
+tab_accounts, tab_reviews, tab_register, tab_batch, tab_sites, tab_dashboard = st.tabs(
+    ["📇 Accounts", "🔀 Duplicate Reviews", "➕ Register Customer", "📦 Batch Scan", "🏠 Sites", "📊 Dashboard"]
 )
 
 
@@ -620,9 +634,9 @@ with tab_reviews:
             review_party_type = get_party_type(incoming)
 
             # Score color
-            if review_party_type == "ORGANIZATION":
-                # For orgs, use cumulative thresholds
-                cum = safe_float(cumulative_score) if cumulative_score is not None else score * 866
+            if review_party_type == "ORGANIZATION" or review_party_type == "SITE":
+                # For orgs and sites, use cumulative thresholds
+                cum = safe_float(cumulative_score) if cumulative_score is not None else score * 275
                 if cum >= 200:
                     score_color = "🟢"
                 elif cum >= 144:
@@ -640,7 +654,7 @@ with tab_reviews:
                 score_display = f"{score:.0%}"
 
             status_emoji = {"pending": "⏳", "approved": "✅", "rejected": "❌"}.get(status, "❓")
-            type_badge = "🏢" if review_party_type == "ORGANIZATION" else "👤"
+            type_badge = "🏢" if review_party_type == "ORGANIZATION" else ("🏠" if review_party_type == "SITE" else "👤")
 
             with st.expander(
                 f"{status_emoji} {type_badge} {format_record_name(incoming)} ↔ {format_record_name(matched)} — "
@@ -697,6 +711,34 @@ with tab_reviews:
                         st.markdown(f"**Created:** {matched.get('createdAt', 'N/A')[:10] if matched.get('createdAt') else 'N/A'}")
                         if matched.get("customerId"):
                             st.caption(f"ID: {matched['customerId']}")
+                elif review_party_type == "SITE":
+                    with left:
+                        st.markdown("**📥 Incoming Site**")
+                        st.markdown(f"**Account:** {incoming.get('accountDescription', 'N/A')} ({incoming.get('accountNumber', '')})")
+                        st.markdown(f"**Site #:** {incoming.get('siteNumber', 'N/A')}")
+                        st.markdown(f"**Address:** {incoming.get('addressLine1', 'N/A')}")
+                        st.markdown(f"**City:** {incoming.get('city', 'N/A')}")
+                        st.markdown(f"**Postal Code:** {incoming.get('postalCode', 'N/A')}")
+                        st.markdown(f"**Country:** {incoming.get('country', 'N/A')}")
+                        st.markdown(f"**County:** {incoming.get('county', 'N/A') or 'N/A'}")
+                        st.markdown(f"**Operating Unit:** {incoming.get('operatingUnit', 'N/A')}")
+                        st.markdown(f"**Purpose:** {incoming.get('purpose', 'N/A')}")
+                        st.markdown(f"**Source:** {incoming.get('sourceSystem', 'N/A')}")
+
+                    with right:
+                        st.markdown("**📄 Matched Site**")
+                        st.markdown(f"**Account:** {matched.get('accountDescription', 'N/A')} ({matched.get('accountNumber', '')})")
+                        st.markdown(f"**Site #:** {matched.get('siteNumber', 'N/A')}")
+                        st.markdown(f"**Address:** {matched.get('addressLine1', 'N/A')}")
+                        st.markdown(f"**City:** {matched.get('city', 'N/A')}")
+                        st.markdown(f"**Postal Code:** {matched.get('postalCode', 'N/A')}")
+                        st.markdown(f"**Country:** {matched.get('country', 'N/A')}")
+                        st.markdown(f"**County:** {matched.get('county', 'N/A') or 'N/A'}")
+                        st.markdown(f"**Operating Unit:** {matched.get('operatingUnit', 'N/A')}")
+                        st.markdown(f"**Purpose:** {matched.get('purpose', 'N/A')}")
+                        st.markdown(f"**Source:** {matched.get('sourceSystem', 'N/A')}")
+                        if matched.get("siteId"):
+                            st.caption(f"Site ID: {matched['siteId']}")
                 else:
                     with left:
                         st.markdown("**📥 Incoming Record**")
@@ -1063,7 +1105,137 @@ with tab_batch:
 
 
 # ===================================================================
-# TAB 5: Dashboard (with Person vs Organization metrics)
+# TAB 5: Sites (Site-Level Dedup)
+# ===================================================================
+with tab_sites:
+    st.subheader("🏠 Site Records (Address-Level Dedup)")
+    st.caption("View and register sites within accounts — detects duplicate addresses")
+
+    SITE_TABLE_NAME = os.getenv("SITE_TABLE_NAME", "dedup-dynamodb-SiteTable")
+    # Ensure env vars are set for the orchestrator
+    os.environ.setdefault("SITE_TABLE_NAME", SITE_TABLE_NAME)
+    os.environ.setdefault("CUSTOMER_TABLE_NAME", CUSTOMER_TABLE)
+    os.environ.setdefault("REVIEW_QUEUE_TABLE_NAME", REVIEW_TABLE)
+    os.environ.setdefault("AUDIT_LOGS_BUCKET", "dedup-s3-dedup-audit-logs")
+
+    def fetch_sites():
+        """Scan SiteTable via boto3."""
+        try:
+            table = get_dynamodb().Table(SITE_TABLE_NAME)
+            items = []
+            resp = table.scan()
+            items.extend(resp.get("Items", []))
+            while "LastEvaluatedKey" in resp:
+                resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
+                items.extend(resp.get("Items", []))
+            return items
+        except Exception:
+            return []
+
+    col_acct_filter, col_site_refresh = st.columns([3, 1])
+    with col_acct_filter:
+        site_acct_filter = st.text_input("Filter by Account Number", placeholder="e.g. 3518670", key="site_acct_filter")
+    with col_site_refresh:
+        st.write("")
+        st.write("")
+        st.button("🔄 Refresh Sites", key="refresh_sites")
+
+    sites = fetch_sites()
+    if sites:
+        site_rows = []
+        for s in sites:
+            site_rows.append({
+                "Account #": s.get("accountNumber", ""),
+                "Account Name": s.get("accountDescription", ""),
+                "Site #": s.get("siteNumber", ""),
+                "Address": s.get("addressLine1", ""),
+                "City": s.get("city", ""),
+                "Postal Code": s.get("postalCode", ""),
+                "Country": s.get("country", ""),
+                "Operating Unit": s.get("operatingUnit", ""),
+                "Purpose": s.get("purpose", ""),
+                "Status": s.get("status", ""),
+            })
+        site_df = pd.DataFrame(site_rows)
+        if site_acct_filter:
+            site_df = site_df[site_df["Account #"].str.contains(site_acct_filter, na=False)]
+        site_df = site_df.sort_values(["Account #", "Site #"]).reset_index(drop=True)
+        st.dataframe(site_df, use_container_width=True, height=400)
+        st.caption(f"Showing {len(site_df)} of {len(sites)} site records")
+    else:
+        st.info("No site records found. Run demo-reset.py to seed site data.")
+
+    # Register Site form
+    st.divider()
+    st.markdown("### Register New Site (Check for Duplicates)")
+    with st.form("register_site_form", clear_on_submit=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            site_acct_num = st.text_input("Account Number *", placeholder="e.g. 3518670", key="s_acct")
+            site_acct_desc = st.text_input("Account Description *", placeholder="e.g. ELTHAM HILL SCHOOL", key="s_desc")
+            site_num = st.text_input("Site Number *", placeholder="e.g. 99999999", key="s_num")
+            site_addr1 = st.text_input("Address Line 1 *", placeholder="e.g. ELTHAM HILL", key="s_addr1")
+            site_city = st.text_input("City *", placeholder="e.g. LONDON", key="s_city")
+        with col2:
+            site_pc = st.text_input("Postal Code *", placeholder="e.g. SE9 5EE", key="s_pc")
+            site_country = st.text_input("Country *", placeholder="e.g. United Kingdom", key="s_country")
+            site_county = st.text_input("County", placeholder="e.g. GREENWICH", key="s_county")
+            site_ou = st.text_input("Operating Unit", value="GB Pearson Education OU", key="s_ou")
+            site_purpose = st.selectbox("Purpose", ["Bill To/Ship To", "Bill To", "Ship To"], key="s_purpose")
+            site_source = st.selectbox("Source System", ["OneCRM", "NES"], key="s_source")
+
+        site_submitted = st.form_submit_button("🏠 Register Site (Check Duplicates)", type="primary")
+
+    if site_submitted:
+        if not site_acct_num or not site_addr1 or not site_city or not site_pc or not site_country:
+            st.error("Account Number, Address Line 1, City, Postal Code, and Country are required.")
+        else:
+            site_payload = {
+                "partyType": "SITE",
+                "accountNumber": site_acct_num,
+                "accountDescription": site_acct_desc,
+                "siteNumber": site_num,
+                "operatingUnit": site_ou,
+                "purpose": site_purpose,
+                "country": site_country,
+                "addressLine1": site_addr1,
+                "city": site_city,
+                "postalCode": site_pc,
+                "county": site_county,
+                "sourceSystem": site_source,
+            }
+            with st.spinner("Checking for duplicate sites in account..."):
+                # Call the site dedup orchestrator directly (bypasses API Gateway)
+                import sys
+                sys.path.insert(0, str(Path(__file__).parent.parent))
+                try:
+                    from agents.intercept.orchestrator import process_register_site
+                    result = process_register_site(site_payload)
+                except Exception as e:
+                    result = {"error": str(e)}
+
+            st.divider()
+            status = result.get("status", "error")
+            if status == "new_record":
+                st.success("✅ New site created — no duplicate found in this account!")
+                st.metric("Site ID", result.get("siteId", "N/A")[:16] + "...")
+            elif status in ("review_pending", "duplicate_found"):
+                score = safe_float(result.get("confidenceScore"))
+                cum = safe_float(result.get("cumulativeScore"))
+                st.warning(f"⚠️ Duplicate site detected! Cumulative score: {int(cum)}/275")
+                res_cols = st.columns(3)
+                res_cols[0].metric("Classification", result.get("confidenceClassification", "N/A"))
+                res_cols[1].metric("Cumulative Score", f"{int(cum)}/275")
+                res_cols[2].metric("Review ID", result.get("reviewId", "N/A")[:12] + "...")
+            else:
+                st.error(f"❌ Error: {result.get('error', json.dumps(result, default=decimal_default))}")
+
+            with st.expander("Raw Response"):
+                st.json(json.loads(json.dumps(result, default=decimal_default)))
+
+
+# ===================================================================
+# TAB 6: Dashboard (with Person vs Organization metrics)
 # ===================================================================
 with tab_dashboard:
     st.subheader("System Dashboard")

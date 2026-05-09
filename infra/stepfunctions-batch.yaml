@@ -1,0 +1,182 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Customer Data Deduplication - Step Functions Standard Workflow (Batch)
+  Asynchronous state machine for batch deduplication of records from S3.
+  Parses CSV/JSON input, processes each record through the Clean Agent,
+  and writes a summary report to S3.
+
+Parameters:
+  StepFunctionsRoleArn:
+    Type: String
+    Description: ARN of the IAM role for Step Functions execution
+
+  BatchParserLambdaArn:
+    Type: String
+    Description: ARN of the Lambda that parses CSV/JSON files from S3
+    Default: 'arn:aws:lambda:us-east-1:ACCOUNT_ID:function:batch-parser'
+
+  CleanAgentLambdaArn:
+    Type: String
+    Description: >
+      ARN of the Lambda proxy that invokes the Clean Agent
+      (AgentCore Runtime /invocations endpoint). Replace with direct
+      InvokeAgent ARN once AgentCore integration is configured.
+    Default: 'arn:aws:lambda:us-east-1:ACCOUNT_ID:function:clean-agent-proxy'
+
+  BatchReportsBucketName:
+    Type: String
+    Description: Name of the S3 bucket for batch summary reports
+    Default: dedup-batch-reports
+
+Resources:
+  BatchStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${AWS::StackName}-dedup-batch'
+      StateMachineType: STANDARD
+      RoleArn: !Ref StepFunctionsRoleArn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Batch dedup workflow — parse S3 file, process each record via Clean Agent, write summary",
+          "StartAt": "ParseInputFile",
+          "TimeoutSeconds": 3600,
+          "States": {
+            "ParseInputFile": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${BatchParserLambdaArn}",
+                "Payload": {
+                  "bucket.$": "$.bucket",
+                  "key.$": "$.key"
+                }
+              },
+              "ResultSelector": {
+                "records.$": "$.Payload.records",
+                "totalRecords.$": "$.Payload.totalRecords",
+                "sourceFile.$": "$.Payload.sourceFile"
+              },
+              "ResultPath": "$.parsed",
+              "Retry": [
+                {
+                  "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "HandleParseError",
+                  "ResultPath": "$.error"
+                }
+              ],
+              "Next": "ProcessRecords"
+            },
+            "ProcessRecords": {
+              "Type": "Map",
+              "ItemsPath": "$.parsed.records",
+              "MaxConcurrency": 5,
+              "Parameters": {
+                "record.$": "$$.Map.Item.Value",
+                "index.$": "$$.Map.Item.Index"
+              },
+              "Iterator": {
+                "StartAt": "InvokeCleanAgent",
+                "States": {
+                  "InvokeCleanAgent": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::lambda:invoke",
+                    "Parameters": {
+                      "FunctionName": "${CleanAgentLambdaArn}",
+                      "Payload": {
+                        "action": "register",
+                        "payload.$": "$.record"
+                      }
+                    },
+                    "ResultSelector": {
+                      "result.$": "$.Payload"
+                    },
+                    "Retry": [
+                      {
+                        "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+                        "IntervalSeconds": 2,
+                        "MaxAttempts": 3,
+                        "BackoffRate": 2
+                      }
+                    ],
+                    "Catch": [
+                      {
+                        "ErrorEquals": ["States.ALL"],
+                        "Next": "RecordError",
+                        "ResultPath": "$.error"
+                      }
+                    ],
+                    "End": true
+                  },
+                  "RecordError": {
+                    "Type": "Pass",
+                    "Parameters": {
+                      "result": {
+                        "status": "error",
+                        "error.$": "$.error"
+                      }
+                    },
+                    "End": true
+                  }
+                }
+              },
+              "ResultPath": "$.mapResults",
+              "Next": "GenerateSummary"
+            },
+            "GenerateSummary": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${BatchParserLambdaArn}",
+                "Payload": {
+                  "action": "summarize",
+                  "sourceFile.$": "$.parsed.sourceFile",
+                  "totalRecords.$": "$.parsed.totalRecords",
+                  "results.$": "$.mapResults",
+                  "reportBucket": "${BatchReportsBucketName}"
+                }
+              },
+              "ResultSelector": {
+                "summary.$": "$.Payload"
+              },
+              "ResultPath": "$.summary",
+              "Retry": [
+                {
+                  "ErrorEquals": ["Lambda.ServiceException"],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+              ],
+              "Next": "BatchComplete"
+            },
+            "BatchComplete": {
+              "Type": "Succeed"
+            },
+            "HandleParseError": {
+              "Type": "Fail",
+              "Error": "ParseError",
+              "Cause": "Failed to parse the input file from S3. Check the file format and bucket permissions."
+            }
+          }
+        }
+
+Outputs:
+  BatchStateMachineArn:
+    Description: ARN of the batch Standard state machine
+    Value: !Ref BatchStateMachine
+    Export:
+      Name: !Sub '${AWS::StackName}-BatchStateMachineArn'
+
+  BatchStateMachineName:
+    Description: Name of the batch Standard state machine
+    Value: !GetAtt BatchStateMachine.Name
+    Export:
+      Name: !Sub '${AWS::StackName}-BatchStateMachineName'

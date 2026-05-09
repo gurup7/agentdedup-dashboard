@@ -1,0 +1,19 @@
+[
+  {
+    "name": "QueryCustomerTool",
+    "description": "Search CustomerTable for potential duplicate matches using blocking strategy (email, phone, postalCode+lastName). Returns up to 10 candidate records.",
+    "inputSchema": {
+      "json": {
+        "type": "object",
+        "properties": {
+          "firstName": {"type": "string", "description": "Customer first name"},
+          "lastName": {"type": "string", "description": "Customer last name"},
+          "email": {"type": "string", "description": "Email address for exact match"},
+          "phone": {"type": "string", "description": "Phone number for exact match"},
+          "postalCode": {"type": "string", "description": "Postal code for blocking strategy"}
+        },
+        "required": ["lastName"]
+      }
+    }
+  }
+]

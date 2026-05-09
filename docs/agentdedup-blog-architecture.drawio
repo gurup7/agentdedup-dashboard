@@ -1,0 +1,167 @@
+<mxfile host="app.diagrams.net" modified="2026-05-08T00:00:00.000Z" agent="5.0" etag="blog-arch-v2" version="21.0.0" type="device">
+  <diagram id="agentdedup-blog" name="AgentDedup Architecture">
+    <mxGraphModel dx="1800" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- Title -->
+        <mxCell id="title" value="AgentDedup — Agentic AI for Customer Data Deduplication" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
+          <mxGeometry x="400" y="10" width="1000" height="40" as="geometry" />
+        </mxCell>
+        <!-- ============ PROACTIVE LAYER ============ -->
+        <mxCell id="proactive-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#4CAF50;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="30" y="70" width="850" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="proactive-label" value="PROACTIVE LAYER — Real-Time Interception (Intercept Agent)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=1;fontColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="40" y="75" width="500" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="sales" value="Sales Systems&#xa;(OneCRM, NES)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#F57C00;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="apigw" value="API Gateway&#xa;(5 endpoints)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="sfn-rt" value="Step Functions&#xa;Express" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8EAF6;strokeColor=#3F51B5;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="intercept" value="Intercept Agent&#xa;AgentCore Runtime&#xa;LangGraph + Bedrock" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="600" y="120" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="a1" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#4CAF50;" edge="1" source="sales" target="apigw" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a2" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#4CAF50;" edge="1" source="apigw" target="sfn-rt" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a3" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#4CAF50;" edge="1" source="sfn-rt" target="intercept" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="proactive-note" value="&lt; 3 second response time" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="350" y="210" width="200" height="20" as="geometry" />
+        </mxCell>
+        <!-- ============ REACTIVE LAYER ============ -->
+        <mxCell id="reactive-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="920" y="70" width="850" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="reactive-label" value="REACTIVE LAYER — Batch Cleanup (Clean Agent)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=1;fontColor=#1565C0;" vertex="1" parent="1">
+          <mxGeometry x="930" y="75" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="s3in" value="S3 Bucket&#xa;(Batch Input)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="960" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="sfn-batch" value="Step Functions&#xa;Standard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8EAF6;strokeColor=#3F51B5;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="clean" value="Clean Agent&#xa;AgentCore Runtime&#xa;LangGraph + Bedrock" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="120" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="a4" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#1976D2;" edge="1" source="s3in" target="sfn-batch" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a5" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#1976D2;" edge="1" source="sfn-batch" target="clean" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="reactive-note" value="Batch processing with summary reports" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#1565C0;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="210" width="250" height="20" as="geometry" />
+        </mxCell>
+        <!-- ============ SHARED TOOL LAYER ============ -->
+        <mxCell id="tools-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FF8F00;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="30" y="320" width="1740" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="tools-label" value="SHARED TOOL LAYER — 8 AWS Lambda Functions via AgentCore Gateway (MCP-compatible)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=1;fontColor=#E65100;" vertex="1" parent="1">
+          <mxGeometry x="40" y="325" width="700" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="t1" value="QueryCustomer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECB3;strokeColor=#FF8F00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="380" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t2" value="RuleBasedMatch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECB3;strokeColor=#FF8F00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="220" y="380" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t3" value="LLMMatch&#xa;(Bedrock Nova Pro)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECB3;strokeColor=#FF8F00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="380" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t4" value="CreateCustomer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECB3;strokeColor=#FF8F00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="550" y="380" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t5" value="MergeCustomer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECB3;strokeColor=#FF8F00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="710" y="380" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t6" value="WriteReview" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECB3;strokeColor=#FF8F00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="870" y="380" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t7" value="WriteAuditLog" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECB3;strokeColor=#FF8F00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="380" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t8" value="GetReviews" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECB3;strokeColor=#FF8F00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1190" y="380" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="agentcore-gw" value="AgentCore Gateway&#xa;+ AgentCore Identity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0E0E0;strokeColor=#616161;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1400" y="370" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="tools-note" value="Two-Stage Pipeline: Rule-Based (deterministic) → LLM (semantic, conditional)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#E65100;" vertex="1" parent="1">
+          <mxGeometry x="300" y="460" width="500" height="20" as="geometry" />
+        </mxCell>
+        <!-- ============ DATA LAYER ============ -->
+        <mxCell id="data-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="30" y="550" width="1740" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="data-label" value="DATA &amp; SECURITY LAYER" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=1;fontColor=#6A1B9A;" vertex="1" parent="1">
+          <mxGeometry x="40" y="555" width="300" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" value="DynamoDB&#xa;CustomerTable&#xa;(Person + Org)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="610" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" value="DynamoDB&#xa;SiteTable&#xa;(Addresses)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="610" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" value="DynamoDB&#xa;ReviewQueue&#xa;(Human Review)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="420" y="610" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" value="S3&#xa;Audit Logs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="600" y="610" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d5" value="S3&#xa;Batch Reports" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="610" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d6" value="AWS KMS&#xa;(Encryption)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#C62828;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="940" y="610" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d7" value="AWS IAM&#xa;(Least Privilege)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#C62828;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="610" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d8" value="CloudWatch&#xa;Logs + Alarms" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8EAF6;strokeColor=#3F51B5;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="610" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d9" value="ECR + CodeBuild&#xa;CloudFormation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0E0E0;strokeColor=#616161;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1420" y="610" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="data-note" value="Prototype: DynamoDB → Production: Oracle EBS REST APIs (only Lambda tool code changes)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#6A1B9A;" vertex="1" parent="1">
+          <mxGeometry x="300" y="700" width="600" height="20" as="geometry" />
+        </mxCell>
+        <!-- ============ DASHBOARD ============ -->
+        <mxCell id="dashboard" value="Streamlit Dashboard&#xa;(Data Steward)&#xa;Human-in-the-Loop" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#C62828;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1560" y="130" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="a-dash" value="" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#C62828;dashed=1;" edge="1" source="dashboard" target="apigw" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1640" y="250" />
+              <mxPoint x="300" y="250" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <!-- Vertical arrows from agents to tools -->
+        <mxCell id="a-int-tools" value="" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#00838F;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="intercept" target="tools-box" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-clean-tools" value="" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#00838F;exitX=0.5;exitY=1;entryX=0.8;entryY=0;" edge="1" source="clean" target="tools-box" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- Vertical arrows from tools to data -->
+        <mxCell id="a-tools-data" value="" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#FF8F00;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="tools-box" target="data-box" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,152 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  CloudWatch Alarms for Customer Data Deduplication Prototype.
+  Monitors Lambda errors, API Gateway 5xx, agent latency, and Step Functions failures.
+
+Parameters:
+  ApiName:
+    Type: String
+    Default: dedup-api
+    Description: API Gateway REST API name
+
+  ApiStage:
+    Type: String
+    Default: prod
+    Description: API Gateway stage name
+
+  InterceptAgentRuntimeName:
+    Type: String
+    Default: intercept-agent-runtime
+    Description: AgentCore Runtime name for Intercept Agent
+
+  StateMachineName:
+    Type: String
+    Default: dedup-realtime-workflow
+    Description: Step Functions state machine name
+
+  AlarmEmail:
+    Type: String
+    Default: ""
+    Description: Email address for alarm notifications (leave empty to skip SNS subscription)
+
+Conditions:
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
+
+Resources:
+  # --- SNS Topic for alarm notifications ---
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: dedup-alarm-notifications
+      DisplayName: Dedup Alarm Notifications
+
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref AlarmNotificationTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  # --- Lambda Error Rate Alarm (>5% errors in 5 minutes) ---
+  LambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: dedup-lambda-error-rate
+      AlarmDescription: >
+        Lambda tool error rate exceeds 5% over 5 minutes.
+        Check /aws/lambda/dedup-tools log group for details.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      OKActions:
+        - !Ref AlarmNotificationTopic
+
+  # --- API Gateway 5xx Alarm ---
+  ApiGateway5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: dedup-apigw-5xx
+      AlarmDescription: >
+        API Gateway is returning 5xx errors. Investigate Step Functions
+        and downstream agent/Lambda failures.
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref ApiName
+        - Name: Stage
+          Value: !Ref ApiStage
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      OKActions:
+        - !Ref AlarmNotificationTopic
+
+  # --- Intercept Agent Latency Alarm (>5s p99) ---
+  InterceptAgentLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: dedup-intercept-agent-latency
+      AlarmDescription: >
+        Intercept Agent p99 latency exceeds 5 seconds SLA.
+        Check agent logs and downstream tool performance.
+      Namespace: AWS/ApiGateway
+      MetricName: Latency
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref ApiName
+        - Name: Stage
+          Value: !Ref ApiStage
+      ExtendedStatistic: p99
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      OKActions:
+        - !Ref AlarmNotificationTopic
+
+  # --- Step Functions Execution Failure Alarm ---
+  StepFunctionsFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: dedup-stepfunctions-failures
+      AlarmDescription: >
+        Step Functions execution failures detected. Check execution
+        history for error details.
+      Namespace: AWS/States
+      MetricName: ExecutionsFailed
+      Dimensions:
+        - Name: StateMachineArn
+          Value: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${StateMachineName}"
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      OKActions:
+        - !Ref AlarmNotificationTopic
+
+Outputs:
+  AlarmNotificationTopicArn:
+    Description: SNS topic ARN for alarm notifications
+    Value: !Ref AlarmNotificationTopic

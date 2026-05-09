@@ -1,0 +1,71 @@
+{
+  "PERSON": {
+    "matchThreshold": 0.6,
+    "scoreType": "normalized",
+    "weights": {
+      "email_exact": 0.40,
+      "phone_exact": 0.30,
+      "firstName_jw": 0.15,
+      "lastName_jw": 0.15,
+      "firstName_soundex": 0.05,
+      "lastName_soundex": 0.05,
+      "dateOfBirth_exact": 0.20
+    },
+    "thresholds": {
+      "high_confidence": 0.9,
+      "potential_duplicate": 0.6,
+      "new_record": 0.6
+    }
+  },
+  "ORGANIZATION": {
+    "matchThreshold": 144,
+    "scoreType": "cumulative",
+    "weights": {
+      "partyName_jw": 89,
+      "partyName_soundex": 89,
+      "address_jw": 31,
+      "city_jw": 23,
+      "postalCode_exact": 55,
+      "state_exact": 15,
+      "province_jw": 17,
+      "taxRegistrationNum_exact": 146,
+      "taxpayerId_exact": 147,
+      "mdrPidId_exact": 145,
+      "matchMarket_exact": 148
+    },
+    "thresholds": {
+      "high_confidence": 200,
+      "potential_duplicate": 144,
+      "new_record": 144
+    }
+  },
+  "SITE": {
+    "matchThreshold": 120,
+    "scoreType": "cumulative",
+    "weights": {
+      "addressLine1_jw": 90,
+      "addressLine2_jw": 25,
+      "city_jw": 30,
+      "postalCode_exact": 55,
+      "country_exact": 40,
+      "county_jw": 15,
+      "operatingUnit_exact": 20
+    },
+    "jw_thresholds": {
+      "addressLine1": 0.80,
+      "addressLine2": 0.80,
+      "city": 0.85,
+      "county": 0.85
+    },
+    "thresholds": {
+      "high_confidence": 200,
+      "potential_duplicate": 120,
+      "new_record": 120
+    },
+    "isDefinitive": {
+      "high": 200,
+      "low": 80
+    },
+    "maxCandidates": 50
+  }
+}

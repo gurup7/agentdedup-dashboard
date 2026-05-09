@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram id="arch" name="AgentDedup Architecture">
+    <mxGraphModel dx="1800" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1920" pageHeight="1080">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="t1" value="&lt;b&gt;AgentDedup — Customer Data Deduplication Architecture&lt;/b&gt;" style="text;html=1;fontSize=18;align=center;" vertex="1" parent="1">
+          <mxGeometry x="500" y="10" width="500" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ SALES SYSTEMS ============ -->
+        <mxCell id="g1" value="&lt;b&gt;Sales Systems&lt;/b&gt;" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="30" y="60" width="160" height="200" as="geometry"/>
+        </mxCell>
+        <mxCell id="s1" value="" style="shape=image;image=https://d2908q01vomqb2.cloudfront.net/da4b9237bacccdf19c0760cab7aec4a8359010b0/2021/08/AWS-Architecture-Icons_PNG_20210730/Arch_General/48/Arch_Users_48.png;imageWidth=48;imageHeight=48;" vertex="1" parent="1">
+          <mxGeometry x="50" y="90" width="48" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="s1t" value="OneCRM" style="text;fontSize=10;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="140" width="70" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="s2" value="" style="shape=image;image=https://d2908q01vomqb2.cloudfront.net/da4b9237bacccdf19c0760cab7aec4a8359010b0/2021/08/AWS-Architecture-Icons_PNG_20210730/Arch_General/48/Arch_Users_48.png;imageWidth=48;imageHeight=48;" vertex="1" parent="1">
+          <mxGeometry x="120" y="90" width="48" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="s2t" value="NES" style="text;fontSize=10;align=center;" vertex="1" parent="1">
+          <mxGeometry x="115" y="140" width="60" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Streamlit -->
+        <mxCell id="ui" value="Streamlit&#xa;Dashboard" style="rounded=1;fillColor=#FF4B4B;fontColor=#fff;fontSize=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="50" y="290" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ API GATEWAY ============ -->
+        <mxCell id="apigw" value="Amazon API Gateway&#xa;REST API" style="rounded=1;fillColor=#E8575A;fontColor=#fff;fontSize=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="260" y="130" width="130" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ STEP FUNCTIONS ============ -->
+        <mxCell id="sfn1" value="Step Functions&#xa;Express (Real-Time)" style="rounded=1;fillColor=#CD2264;fontColor=#fff;fontSize=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="460" y="80" width="140" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="sfn2" value="Step Functions&#xa;Standard (Batch)" style="rounded=1;fillColor=#CD2264;fontColor=#fff;fontSize=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="460" y="200" width="140" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ AGENTCORE ============ -->
+        <mxCell id="g2" value="&lt;b&gt;Amazon Bedrock AgentCore&lt;/b&gt;" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="670" y="50" width="350" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="ia" value="Intercept Agent&#xa;LangGraph + Claude&#xa;(Proactive)" style="rounded=1;fillColor=#FF6B35;fontColor=#fff;fontSize=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="690" y="90" width="130" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="ca" value="Clean Agent&#xa;LangGraph + Claude&#xa;(Reactive)" style="rounded=1;fillColor=#4ECDC4;fontColor=#fff;fontSize=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="690" y="200" width="130" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="gw" value="AgentCore Gateway&#xa;MCP Tool Registry&#xa;(7 Lambda Targets)" style="rounded=1;fillColor=#FFD93D;fontColor=#000;fontSize=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="860" y="90" width="140" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="id" value="AgentCore&#xa;Identity" style="rounded=1;fillColor=#DD344C;fontColor=#fff;fontSize=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="880" y="210" width="100" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ LAMBDA TOOLS ============ -->
+        <mxCell id="g3" value="&lt;b&gt;Lambda Tools&lt;/b&gt;" style="rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="50" width="300" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="l1" value="QueryCustomer" style="rounded=1;fillColor=#ED7100;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="80" width="110" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="l2" value="CreateCustomer" style="rounded=1;fillColor=#ED7100;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="80" width="110" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="l3" value="MergeCustomer" style="rounded=1;fillColor=#ED7100;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="130" width="110" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="l4" value="RuleBasedMatch" style="rounded=1;fillColor=#ED7100;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="130" width="110" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="l5" value="LLMMatch" style="rounded=1;fillColor=#ED7100;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="180" width="110" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="l6" value="WriteReview" style="rounded=1;fillColor=#ED7100;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="180" width="110" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="l7" value="WriteAuditLog" style="rounded=1;fillColor=#ED7100;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="1170" y="230" width="110" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ BEDROCK ============ -->
+        <mxCell id="br" value="Amazon Bedrock&#xa;Claude 3 Sonnet" style="rounded=1;fillColor=#7B68EE;fontColor=#fff;fontSize=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="130" width="120" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ DATA LAYER ============ -->
+        <mxCell id="g4" value="&lt;b&gt;Data Layer&lt;/b&gt;" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="670" y="380" width="710" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="d1" value="DynamoDB&#xa;CustomerTable&#xa;(Oracle EBS TCA)" style="rounded=1;fillColor=#3F8EFC;fontColor=#fff;fontSize=9;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="700" y="410" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="d2" value="DynamoDB&#xa;ReviewQueue" style="rounded=1;fillColor=#3F8EFC;fontColor=#fff;fontSize=9;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="870" y="410" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="d3" value="S3&#xa;Batch Input" style="rounded=1;fillColor=#3F8624;fontColor=#fff;fontSize=9;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="410" width="90" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="d4" value="S3&#xa;Audit Logs" style="rounded=1;fillColor=#3F8624;fontColor=#fff;fontSize=9;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1170" y="410" width="90" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="d5" value="S3&#xa;Reports" style="rounded=1;fillColor=#3F8624;fontColor=#fff;fontSize=9;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1290" y="410" width="70" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ SECURITY ============ -->
+        <mxCell id="g5" value="&lt;b&gt;Security &amp; Monitoring&lt;/b&gt;" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="30" y="380" width="580" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec1" value="KMS&#xa;Encryption" style="rounded=1;fillColor=#DD344C;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="50" y="410" width="80" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec2" value="IAM&#xa;Least Privilege" style="rounded=1;fillColor=#DD344C;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="160" y="410" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec3" value="CloudWatch&#xa;Logs + Alarms" style="rounded=1;fillColor=#CD2264;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="280" y="410" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec4" value="ECR&#xa;Images" style="rounded=1;fillColor=#ED7100;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="400" y="410" width="70" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec5" value="CodeBuild&#xa;ARM64" style="rounded=1;fillColor=#4D27AA;fontColor=#fff;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="500" y="410" width="80" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ ARROWS ============ -->
+        <mxCell id="a1" edge="1" source="s1" target="apigw" parent="1" style="strokeWidth=2;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a2" edge="1" source="s2" target="apigw" parent="1" style="strokeWidth=2;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a3" edge="1" source="ui" target="apigw" parent="1" style="strokeWidth=2;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a4" edge="1" source="apigw" target="sfn1" parent="1" style="strokeWidth=2;" value="POST /register&#xa;/approve /reject"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a5" edge="1" source="d3" target="sfn2" parent="1" style="strokeWidth=2;dashed=1;" value="S3 Event"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a6" edge="1" source="sfn1" target="ia" parent="1" style="strokeWidth=2;" value="Invoke"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a7" edge="1" source="sfn2" target="ca" parent="1" style="strokeWidth=2;" value="Invoke"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a8" edge="1" source="ia" target="gw" parent="1" style="strokeWidth=2;" value="Tool Calls"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a9" edge="1" source="ca" target="gw" parent="1" style="strokeWidth=2;" value="Tool Calls"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a10" edge="1" source="gw" target="l1" parent="1" style="strokeWidth=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a11" edge="1" source="gw" target="l4" parent="1" style="strokeWidth=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a12" edge="1" source="l5" target="br" parent="1" style="strokeWidth=2;" value="LLM"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a13" edge="1" source="ia" target="br" parent="1" style="strokeWidth=1;dashed=1;strokeColor=#7B68EE;" value="LangGraph&#xa;Decisions"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a14" edge="1" source="l1" target="d1" parent="1" style="strokeWidth=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a15" edge="1" source="l6" target="d2" parent="1" style="strokeWidth=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a16" edge="1" source="l7" target="d4" parent="1" style="strokeWidth=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,122 @@
+default_agent: clean_agent
+agents:
+  intercept_agent:
+    name: intercept_agent
+    language: python
+    node_version: '20'
+    entrypoint: C:/Users/GuruprakashSubbarao/OneDrive - IBM/1_WorkArea/3_Project_Assignments/Pearson-AgentocAI-DeDup-Kiro/agents/intercept/agent.py
+    deployment_type: container
+    runtime_type: null
+    platform: linux/arm64
+    container_runtime: none
+    source_path: C:\Users\GuruprakashSubbarao\OneDrive - IBM\1_WorkArea\3_Project_Assignments\Pearson-AgentocAI-DeDup-Kiro\agents\intercept
+    aws:
+      execution_role: arn:aws:iam::553556337417:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-aab5be836a
+      execution_role_auto_create: false
+      account: '553556337417'
+      region: us-east-1
+      ecr_repository: 553556337417.dkr.ecr.us-east-1.amazonaws.com/intercept-agent
+      ecr_auto_create: false
+      s3_path: null
+      s3_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: false
+      lifecycle_configuration:
+        idle_runtime_session_timeout: null
+        max_lifetime: null
+    bedrock_agentcore:
+      agent_id: intercept_agent-w0OWXL4iT9
+      agent_arn: arn:aws:bedrock-agentcore:us-east-1:553556337417:runtime/intercept_agent-w0OWXL4iT9
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-intercept_agent-builder
+      execution_role: arn:aws:iam::553556337417:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-aab5be836a
+      source_bucket: bedrock-agentcore-codebuild-sources-553556337417-us-east-1
+    memory:
+      mode: NO_MEMORY
+      memory_id: null
+      memory_arn: null
+      memory_name: null
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+      was_created_by_toolkit: false
+    identity:
+      credential_providers: []
+      workload: null
+    aws_jwt:
+      enabled: false
+      audiences: []
+      signing_algorithm: ES384
+      issuer_url: null
+      duration_seconds: 300
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
+    api_key_env_var_name: null
+    api_key_credential_provider_name: null
+    is_generated_by_agentcore_create: false
+  clean_agent:
+    name: clean_agent
+    language: python
+    node_version: '20'
+    entrypoint: agent.py
+    deployment_type: container
+    runtime_type: null
+    platform: linux/arm64
+    container_runtime: none
+    source_path: C:\\Users\\GuruprakashSubbarao\\OneDrive - IBM\\1_WorkArea\\3_Project_Assignments\\Pearson-AgentocAI-DeDup-Kiro\\agents\\clean
+    aws:
+      execution_role: arn:aws:iam::553556337417:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-cc3c2bbfcc
+      execution_role_auto_create: false
+      account: '553556337417'
+      region: us-east-1
+      ecr_repository: 553556337417.dkr.ecr.us-east-1.amazonaws.com/clean-agent
+      ecr_auto_create: false
+      s3_path: null
+      s3_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: false
+      lifecycle_configuration:
+        idle_runtime_session_timeout: null
+        max_lifetime: null
+    bedrock_agentcore:
+      agent_id: clean_agent-80qqfi55mm
+      agent_arn: arn:aws:bedrock-agentcore:us-east-1:553556337417:runtime/clean_agent-80qqfi55mm
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-clean_agent-builder
+      execution_role: arn:aws:iam::553556337417:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-cc3c2bbfcc
+      source_bucket: bedrock-agentcore-codebuild-sources-553556337417-us-east-1
+    memory:
+      mode: NO_MEMORY
+      memory_id: null
+      memory_arn: null
+      memory_name: null
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+      was_created_by_toolkit: false
+    identity:
+      credential_providers: []
+      workload: null
+    aws_jwt:
+      enabled: false
+      audiences: []
+      signing_algorithm: ES384
+      issuer_url: null
+      duration_seconds: 300
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
+    api_key_env_var_name: null
+    api_key_credential_provider_name: null
+    is_generated_by_agentcore_create: false

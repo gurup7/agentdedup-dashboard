@@ -1,0 +1,231 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AgentDedup Dashboard - ECS Fargate + ALB (WebSocket support)
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-86cd54fb
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: "subnet-54ebf619,subnet-3787ca51"
+  ImageUri:
+    Type: String
+    Default: 553556337417.dkr.ecr.us-east-1.amazonaws.com/agentdedup-dashboard:latest
+
+Resources:
+  # Security Group for ALB
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB for AgentDedup Dashboard
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  # Security Group for ECS Tasks
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ECS Tasks for AgentDedup Dashboard
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8501
+          ToPort: 8501
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+
+  # Application Load Balancer
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: agentdedup-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets: !Ref SubnetIds
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+
+  # Target Group with stickiness for WebSocket
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: agentdedup-tg
+      Port: 8501
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckPath: /_stcore/health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: "true"
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: "86400"
+
+  # HTTP Listener
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: agentdedup-cluster
+
+  # ECS Task Execution Role
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: agentdedup-task-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # ECS Task Role (access to DynamoDB, S3, etc.)
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: agentdedup-task-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DashboardAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/dedup-dynamodb-CustomerTable"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/dedup-dynamodb-CustomerTable/index/*"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/dedup-dynamodb-ReviewQueue"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/dedup-dynamodb-ReviewQueue/index/*"
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                  - states:DescribeExecution
+                Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:dedup-app-dedup-batch"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetObject
+                Resource:
+                  - "arn:aws:s3:::dedup-s3-dedup-batch-reports"
+                  - "arn:aws:s3:::dedup-s3-dedup-batch-reports/*"
+              - Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource: "*"
+
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/agentdedup-dashboard
+      RetentionInDays: 14
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: agentdedup-dashboard
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: dashboard
+          Image: !Ref ImageUri
+          PortMappings:
+            - ContainerPort: 8501
+              Protocol: tcp
+          Environment:
+            - Name: API_URL
+              Value: https://qlx4tvau7g.execute-api.us-east-1.amazonaws.com/prod
+            - Name: API_KEY
+              Value: j88R5YxG7f3enQYQnJJO86Wi5Pu8jE4u2s9wgYBc
+            - Name: AWS_REGION
+              Value: us-east-1
+            - Name: CUSTOMER_TABLE_NAME
+              Value: dedup-dynamodb-CustomerTable
+            - Name: REVIEW_QUEUE_TABLE_NAME
+              Value: dedup-dynamodb-ReviewQueue
+            - Name: BEDROCK_MODEL_ID
+              Value: amazon.nova-pro-v1:0
+            - Name: BATCH_STATE_MACHINE_ARN
+              Value: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:dedup-app-dedup-batch"
+            - Name: BATCH_INPUT_BUCKET
+              Value: dedup-s3-dedup-batch-input
+            - Name: BATCH_INPUT_KEY
+              Value: scenario3-existing-dupes.json
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: dashboard
+
+  # ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: HTTPListener
+    Properties:
+      ServiceName: agentdedup-dashboard
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+      LoadBalancers:
+        - ContainerName: dashboard
+          ContainerPort: 8501
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  DashboardURL:
+    Description: AgentDedup Dashboard URL
+    Value: !Sub "http://${ALB.DNSName}"
+  ALBDnsName:
+    Description: ALB DNS Name
+    Value: !GetAtt ALB.DNSName

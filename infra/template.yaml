@@ -1,0 +1,839 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Customer Data Deduplication — Unified SAM stack.
+  Deploys all Lambda tools, Step Functions workflows, and API Gateway.
+
+# ---------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------
+Parameters:
+  CustomerTableName:
+    Type: String
+    Default: CustomerTable
+  ReviewQueueTableName:
+    Type: String
+    Default: ReviewQueue
+  AuditLogsBucket:
+    Type: String
+    Default: dedup-audit-logs
+  BatchReportsBucket:
+    Type: String
+    Default: dedup-batch-reports
+  BedrockModelId:
+    Type: String
+    Default: amazon.nova-pro-v1:0
+  SiteTableName:
+    Type: String
+    Default: dedup-dynamodb-SiteTable
+  IamStackName:
+    Type: String
+    Default: dedup-iam
+    Description: Name of the deployed IAM stack for Fn::ImportValue
+
+# ---------------------------------------------------------------
+# Globals
+# ---------------------------------------------------------------
+Globals:
+  Function:
+    Runtime: python3.13
+    Handler: handler.handler
+    Timeout: 30
+    MemorySize: 256
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        CUSTOMER_TABLE_NAME: !Ref CustomerTableName
+        REVIEW_QUEUE_TABLE_NAME: !Ref ReviewQueueTableName
+        AUDIT_LOGS_BUCKET: !Ref AuditLogsBucket
+        SITE_TABLE_NAME: !Ref SiteTableName
+
+Resources:
+  # =============================================================
+  # Lambda Functions — Shared Tools
+  # =============================================================
+  QueryCustomerTool:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-query-customer-tool'
+      CodeUri: ../tools/query_customer/
+      Role: !ImportValue
+        Fn::Sub: '${IamStackName}-QueryCustomerToolRoleArn'
+
+  CreateCustomerTool:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-create-customer-tool'
+      CodeUri: ../tools/create_customer/
+      Role: !ImportValue
+        Fn::Sub: '${IamStackName}-CreateCustomerToolRoleArn'
+
+  MergeCustomerTool:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-merge-customer-tool'
+      CodeUri: ../tools/merge_customer/
+      Role: !ImportValue
+        Fn::Sub: '${IamStackName}-MergeCustomerToolRoleArn'
+
+  RuleBasedMatchTool:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-rule-based-match-tool'
+      CodeUri: ../tools/rule_based_match/
+      Role: !ImportValue
+        Fn::Sub: '${IamStackName}-RuleBasedMatchToolRoleArn'
+
+  LLMMatchTool:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-llm-match-tool'
+      CodeUri: ../tools/llm_match/
+      Timeout: 60
+      Role: !ImportValue
+        Fn::Sub: '${IamStackName}-LLMMatchToolRoleArn'
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+
+  WriteReviewTool:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-write-review-tool'
+      CodeUri: ../tools/write_review/
+      Role: !ImportValue
+        Fn::Sub: '${IamStackName}-WriteReviewToolRoleArn'
+
+  WriteAuditLogTool:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-write-audit-log-tool'
+      CodeUri: ../tools/write_audit_log/
+      Role: !ImportValue
+        Fn::Sub: '${IamStackName}-WriteAuditLogToolRoleArn'
+
+  GetReviewsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-get-reviews'
+      CodeUri: ../tools/get_reviews/
+      Role: !ImportValue
+        Fn::Sub: '${IamStackName}-GetReviewsRoleArn'
+
+  BatchParserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-batch-parser'
+      CodeUri: ../tools/batch_parser/
+      Timeout: 60
+      Policies:
+        - S3ReadPolicy:
+            BucketName: dedup-batch-input
+        - S3WritePolicy:
+            BucketName: !Ref BatchReportsBucket
+      Environment:
+        Variables:
+          BATCH_REPORTS_BUCKET: !Ref BatchReportsBucket
+
+  # =============================================================
+  # Agent Proxy Lambdas
+  # =============================================================
+  InterceptAgentProxy:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-intercept-agent-proxy'
+      CodeUri: ../tools/agent_proxy/
+      Timeout: 30
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CustomerTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReviewQueueTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SiteTableName
+        - S3WritePolicy:
+            BucketName: !Ref AuditLogsBucket
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: '*'
+      Environment:
+        Variables:
+          AGENT_TYPE: intercept
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+
+  CleanAgentProxy:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-clean-agent-proxy'
+      CodeUri: ../tools/agent_proxy/
+      Timeout: 60
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CustomerTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReviewQueueTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SiteTableName
+        - S3WritePolicy:
+            BucketName: !Ref AuditLogsBucket
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: '*'
+      Environment:
+        Variables:
+          AGENT_TYPE: clean
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+
+
+  # =============================================================
+  # Step Functions — Real-Time (Express)
+  # =============================================================
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt InterceptAgentProxy.Arn
+                  - !GetAtt CleanAgentProxy.Arn
+                  - !GetAtt BatchParserFunction.Arn
+
+  RealtimeStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${AWS::StackName}-dedup-realtime'
+      StateMachineType: EXPRESS
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Real-time dedup — routes register/approve/reject to Intercept Agent proxy",
+          "StartAt": "DetermineAction",
+          "TimeoutSeconds": 10,
+          "States": {
+            "DetermineAction": {
+              "Type": "Choice",
+              "Choices": [
+                { "Variable": "$.action", "StringEquals": "register", "Next": "InvokeRegister" },
+                { "Variable": "$.action", "StringEquals": "approve",  "Next": "InvokeApprove"  },
+                { "Variable": "$.action", "StringEquals": "reject",   "Next": "InvokeReject"   }
+              ],
+              "Default": "UnknownAction"
+            },
+            "InvokeRegister": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${InterceptAgentProxy}",
+                "Payload": { "action": "register", "payload.$": "$.payload" }
+              },
+              "ResultSelector": { "body.$": "$.Payload" },
+              "ResultPath": "$.result",
+              "OutputPath": "$.result.body",
+              "Retry": [{ "ErrorEquals": ["Lambda.ServiceException","Lambda.TooManyRequestsException"], "IntervalSeconds": 1, "MaxAttempts": 3, "BackoffRate": 2 }],
+              "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "HandleError", "ResultPath": "$.error" }],
+              "End": true
+            },
+            "InvokeApprove": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${InterceptAgentProxy}",
+                "Payload": { "action": "approve", "reviewId.$": "$.reviewId" }
+              },
+              "ResultSelector": { "body.$": "$.Payload" },
+              "ResultPath": "$.result",
+              "OutputPath": "$.result.body",
+              "Retry": [{ "ErrorEquals": ["Lambda.ServiceException","Lambda.TooManyRequestsException"], "IntervalSeconds": 1, "MaxAttempts": 3, "BackoffRate": 2 }],
+              "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "HandleError", "ResultPath": "$.error" }],
+              "End": true
+            },
+            "InvokeReject": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${InterceptAgentProxy}",
+                "Payload": { "action": "reject", "reviewId.$": "$.reviewId" }
+              },
+              "ResultSelector": { "body.$": "$.Payload" },
+              "ResultPath": "$.result",
+              "OutputPath": "$.result.body",
+              "Retry": [{ "ErrorEquals": ["Lambda.ServiceException","Lambda.TooManyRequestsException"], "IntervalSeconds": 1, "MaxAttempts": 3, "BackoffRate": 2 }],
+              "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "HandleError", "ResultPath": "$.error" }],
+              "End": true
+            },
+            "UnknownAction": {
+              "Type": "Fail",
+              "Error": "UnknownAction",
+              "Cause": "The 'action' field must be one of: register, approve, reject"
+            },
+            "HandleError": {
+              "Type": "Pass",
+              "Parameters": {
+                "error": "AgentInvocationFailed",
+                "message": "Intercept Agent invocation failed. Check CloudWatch logs.",
+                "details.$": "$.error"
+              },
+              "End": true
+            }
+          }
+        }
+
+  # =============================================================
+  # Step Functions — Batch (Standard)
+  # =============================================================
+  BatchStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${AWS::StackName}-dedup-batch'
+      StateMachineType: STANDARD
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Batch dedup — parse S3 file, process each record via Clean Agent, write summary",
+          "StartAt": "ParseInputFile",
+          "TimeoutSeconds": 3600,
+          "States": {
+            "ParseInputFile": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${BatchParserFunction}",
+                "Payload": { "bucket.$": "$.bucket", "key.$": "$.key" }
+              },
+              "ResultSelector": {
+                "records.$": "$.Payload.records",
+                "totalRecords.$": "$.Payload.totalRecords",
+                "sourceFile.$": "$.Payload.sourceFile"
+              },
+              "ResultPath": "$.parsed",
+              "Retry": [{ "ErrorEquals": ["Lambda.ServiceException","Lambda.TooManyRequestsException"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2 }],
+              "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "HandleParseError", "ResultPath": "$.error" }],
+              "Next": "ProcessRecords"
+            },
+            "ProcessRecords": {
+              "Type": "Map",
+              "ItemsPath": "$.parsed.records",
+              "MaxConcurrency": 5,
+              "Parameters": { "record.$": "$$.Map.Item.Value", "index.$": "$$.Map.Item.Index" },
+              "Iterator": {
+                "StartAt": "InvokeCleanAgent",
+                "States": {
+                  "InvokeCleanAgent": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::lambda:invoke",
+                    "Parameters": {
+                      "FunctionName": "${CleanAgentProxy}",
+                      "Payload": { "action": "register", "payload.$": "$.record" }
+                    },
+                    "ResultSelector": { "result.$": "$.Payload" },
+                    "Retry": [{ "ErrorEquals": ["Lambda.ServiceException","Lambda.TooManyRequestsException"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2 }],
+                    "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "RecordError", "ResultPath": "$.error" }],
+                    "End": true
+                  },
+                  "RecordError": {
+                    "Type": "Pass",
+                    "Parameters": { "result": { "status": "error", "error.$": "$.error" } },
+                    "End": true
+                  }
+                }
+              },
+              "ResultPath": "$.mapResults",
+              "Next": "GenerateSummary"
+            },
+            "GenerateSummary": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${BatchParserFunction}",
+                "Payload": {
+                  "action": "summarize",
+                  "sourceFile.$": "$.parsed.sourceFile",
+                  "totalRecords.$": "$.parsed.totalRecords",
+                  "results.$": "$.mapResults",
+                  "reportBucket": "${BatchReportsBucket}"
+                }
+              },
+              "ResultSelector": { "summary.$": "$.Payload" },
+              "ResultPath": "$.summary",
+              "Retry": [{ "ErrorEquals": ["Lambda.ServiceException"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+              "Next": "BatchComplete"
+            },
+            "BatchComplete": { "Type": "Succeed" },
+            "HandleParseError": {
+              "Type": "Fail",
+              "Error": "ParseError",
+              "Cause": "Failed to parse the input file from S3."
+            }
+          }
+        }
+
+  # =============================================================
+  # API Gateway
+  # =============================================================
+  ApiGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeStepFunctionsAndLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartSyncExecution
+                Resource: !Ref RealtimeStateMachine
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt GetReviewsFunction.Arn
+
+  DedupApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-dedup-api'
+      Description: Customer Data Deduplication REST API
+      ApiKeySourceType: HEADER
+      EndpointConfiguration:
+        Types: [REGIONAL]
+
+  # --- Request Validation ---
+  RequestValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      Name: body-validator
+      RestApiId: !Ref DedupApi
+      ValidateRequestBody: true
+      ValidateRequestParameters: false
+
+  CustomerRecordModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      RestApiId: !Ref DedupApi
+      ContentType: application/json
+      Name: CustomerRecord
+      Schema:
+        $schema: 'http://json-schema.org/draft-04/schema#'
+        title: CustomerRecord
+        type: object
+        required: [sourceSystem]
+        properties:
+          partyType: { type: string }
+          firstName: { type: string }
+          lastName: { type: string }
+          partyName: { type: string }
+          email: { type: string }
+          phone: { type: string }
+          dateOfBirth: { type: string }
+          taxRegistrationNum: { type: string }
+          taxpayerId: { type: string }
+          mdrPidId: { type: string }
+          matchMarket: { type: string }
+          province: { type: string }
+          address:
+            type: object
+            properties:
+              street: { type: string }
+              city: { type: string }
+              state: { type: string }
+              postalCode: { type: string }
+              country: { type: string }
+          sourceSystem: { type: string }
+
+  # --- /register ---
+  RegisterResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !GetAtt DedupApi.RootResourceId
+      PathPart: register
+
+  RegisterPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref RegisterResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestValidatorId: !Ref RequestValidator
+      RequestModels:
+        application/json: !Ref CustomerRecordModel
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:states:action/StartSyncExecution'
+        Credentials: !GetAtt ApiGatewayRole.Arn
+        RequestTemplates:
+          application/json: !Sub |
+            {
+              "stateMachineArn": "${RealtimeStateMachine}",
+              "input": "{\"action\": \"register\", \"payload\": $util.escapeJavaScript($input.body)}"
+            }
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: |
+                #set($output = $util.parseJson($input.path('$.output')))
+                $output
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+          - StatusCode: '500'
+            SelectionPattern: '.*ERROR.*'
+            ResponseTemplates:
+              application/json: '{"error": "Internal server error"}'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: '500'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  RegisterOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref RegisterResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # --- /reviews ---
+  ReviewsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !GetAtt DedupApi.RootResourceId
+      PathPart: reviews
+
+  ReviewsGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ReviewsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetReviewsFunction.Arn}/invocations'
+        Credentials: !GetAtt ApiGatewayRole.Arn
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ReviewsOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ReviewsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # --- /reviews/{reviewId} ---
+  ReviewIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !Ref ReviewsResource
+      PathPart: '{reviewId}'
+
+  ReviewIdGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ReviewIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.reviewId: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetReviewsFunction.Arn}/invocations'
+        Credentials: !GetAtt ApiGatewayRole.Arn
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # --- /reviews/{reviewId}/approve ---
+  ApproveResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !Ref ReviewIdResource
+      PathPart: approve
+
+  ApprovePost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ApproveResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.reviewId: true
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:states:action/StartSyncExecution'
+        Credentials: !GetAtt ApiGatewayRole.Arn
+        RequestTemplates:
+          application/json: !Sub |
+            {
+              "stateMachineArn": "${RealtimeStateMachine}",
+              "input": "{\"action\": \"approve\", \"reviewId\": \"$input.params('reviewId')\"}"
+            }
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: |
+                #set($output = $util.parseJson($input.path('$.output')))
+                $output
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ApproveOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ApproveResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # --- /reviews/{reviewId}/reject ---
+  RejectResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !Ref ReviewIdResource
+      PathPart: reject
+
+  RejectPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref RejectResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.reviewId: true
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:states:action/StartSyncExecution'
+        Credentials: !GetAtt ApiGatewayRole.Arn
+        RequestTemplates:
+          application/json: !Sub |
+            {
+              "stateMachineArn": "${RealtimeStateMachine}",
+              "input": "{\"action\": \"reject\", \"reviewId\": \"$input.params('reviewId')\"}"
+            }
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: |
+                #set($output = $util.parseJson($input.path('$.output')))
+                $output
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  RejectOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref RejectResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # --- Deployment & Stage ---
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - RegisterPost
+      - ReviewsGet
+      - ReviewIdGet
+      - ApprovePost
+      - RejectPost
+    Properties:
+      RestApiId: !Ref DedupApi
+
+  ProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref DedupApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+      MethodSettings:
+        - HttpMethod: '*'
+          ResourcePath: '/*'
+          ThrottlingBurstLimit: 50
+          ThrottlingRateLimit: 20
+
+  # --- API Key & Usage Plan ---
+  DedupApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: ProdStage
+    Properties:
+      Name: !Sub '${AWS::StackName}-dedup-api-key'
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref DedupApi
+          StageName: prod
+
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ProdStage
+    Properties:
+      UsagePlanName: !Sub '${AWS::StackName}-usage-plan'
+      ApiStages:
+        - ApiId: !Ref DedupApi
+          Stage: prod
+      Throttle:
+        BurstLimit: 50
+        RateLimit: 20
+
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref DedupApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+  # --- Lambda Permission for API GW ---
+  GetReviewsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetReviewsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DedupApi}/*'
+
+# ---------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------
+Outputs:
+  ApiUrl:
+    Description: Base URL of the Dedup REST API
+    Value: !Sub 'https://${DedupApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+
+  ApiKeyId:
+    Description: API Key ID (retrieve value via aws apigateway get-api-key --api-key ID --include-value)
+    Value: !Ref DedupApiKey
+
+  RealtimeStateMachineArn:
+    Description: ARN of the real-time Express state machine
+    Value: !Ref RealtimeStateMachine
+
+  BatchStateMachineArn:
+    Description: ARN of the batch Standard state machine
+    Value: !Ref BatchStateMachine
+
+  InterceptAgentProxyArn:
+    Description: ARN of the Intercept Agent proxy Lambda
+    Value: !GetAtt InterceptAgentProxy.Arn
+
+  CleanAgentProxyArn:
+    Description: ARN of the Clean Agent proxy Lambda
+    Value: !GetAtt CleanAgentProxy.Arn

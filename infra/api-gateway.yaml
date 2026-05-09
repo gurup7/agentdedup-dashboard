@@ -1,0 +1,473 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Customer Data Deduplication - API Gateway REST API
+  Endpoints for record submission, review management, and merge actions.
+  Uses API key authentication and request validation.
+
+Parameters:
+  GetReviewsLambdaArn:
+    Type: String
+    Description: ARN of the GetReviews Lambda function
+
+  RealtimeStateMachineArn:
+    Type: String
+    Description: ARN of the Step Functions Express Workflow (real-time)
+
+  ApiGatewayRoleArn:
+    Type: String
+    Description: ARN of the IAM role for API Gateway to invoke Step Functions and Lambda
+
+Resources:
+  # ---------------------------------------------------------------
+  # REST API
+  # ---------------------------------------------------------------
+  DedupApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-dedup-api'
+      Description: Customer Data Deduplication REST API
+      ApiKeySourceType: HEADER
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # ---------------------------------------------------------------
+  # Request Validation
+  # ---------------------------------------------------------------
+  RequestValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      Name: body-validator
+      RestApiId: !Ref DedupApi
+      ValidateRequestBody: true
+      ValidateRequestParameters: false
+
+  # ---------------------------------------------------------------
+  # Request Model — POST /register payload
+  # ---------------------------------------------------------------
+  CustomerRecordModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      RestApiId: !Ref DedupApi
+      ContentType: application/json
+      Name: CustomerRecord
+      Schema:
+        $schema: 'http://json-schema.org/draft-04/schema#'
+        title: CustomerRecord
+        type: object
+        required:
+          - firstName
+          - lastName
+          - sourceSystem
+        properties:
+          firstName:
+            type: string
+          lastName:
+            type: string
+          email:
+            type: string
+          phone:
+            type: string
+          dateOfBirth:
+            type: string
+          address:
+            type: object
+            properties:
+              street:
+                type: string
+              city:
+                type: string
+              state:
+                type: string
+              postalCode:
+                type: string
+              country:
+                type: string
+          sourceSystem:
+            type: string
+
+  # ---------------------------------------------------------------
+  # API Key and Usage Plan
+  # ---------------------------------------------------------------
+  DedupApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: ApiDeployment
+    Properties:
+      Name: !Sub '${AWS::StackName}-dedup-api-key'
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref DedupApi
+          StageName: prod
+
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ProdStage
+    Properties:
+      UsagePlanName: !Sub '${AWS::StackName}-dedup-usage-plan'
+      ApiStages:
+        - ApiId: !Ref DedupApi
+          Stage: prod
+      Throttle:
+        BurstLimit: 50
+        RateLimit: 20
+
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref DedupApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+  # ---------------------------------------------------------------
+  # Resources: /register
+  # ---------------------------------------------------------------
+  RegisterResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !GetAtt DedupApi.RootResourceId
+      PathPart: register
+
+  RegisterPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref RegisterResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestValidatorId: !Ref RequestValidator
+      RequestModels:
+        application/json: !Ref CustomerRecordModel
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:states:action/StartSyncExecution'
+        Credentials: !Ref ApiGatewayRoleArn
+        RequestTemplates:
+          application/json: !Sub |
+            {
+              "stateMachineArn": "${RealtimeStateMachineArn}",
+              "input": "{\"action\": \"register\", \"payload\": $util.escapeJavaScript($input.body)}"
+            }
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: |
+                #set($output = $util.parseJson($input.path('$.output')))
+                $output
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+          - StatusCode: '500'
+            SelectionPattern: '.*ERROR.*'
+            ResponseTemplates:
+              application/json: '{"error": "Internal server error"}'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: '500'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  RegisterOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref RegisterResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # ---------------------------------------------------------------
+  # Resources: /reviews
+  # ---------------------------------------------------------------
+  ReviewsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !GetAtt DedupApi.RootResourceId
+      PathPart: reviews
+
+  ReviewsGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ReviewsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.querystring.status: false
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetReviewsLambdaArn}/invocations'
+        Credentials: !Ref ApiGatewayRoleArn
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ReviewsOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ReviewsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # ---------------------------------------------------------------
+  # Resources: /reviews/{reviewId}
+  # ---------------------------------------------------------------
+  ReviewIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !Ref ReviewsResource
+      PathPart: '{reviewId}'
+
+  ReviewIdGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ReviewIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.reviewId: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetReviewsLambdaArn}/invocations'
+        Credentials: !Ref ApiGatewayRoleArn
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # ---------------------------------------------------------------
+  # Resources: /reviews/{reviewId}/approve
+  # ---------------------------------------------------------------
+  ApproveResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !Ref ReviewIdResource
+      PathPart: approve
+
+  ApprovePost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ApproveResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.reviewId: true
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:states:action/StartSyncExecution'
+        Credentials: !Ref ApiGatewayRoleArn
+        RequestTemplates:
+          application/json: !Sub |
+            {
+              "stateMachineArn": "${RealtimeStateMachineArn}",
+              "input": "{\"action\": \"approve\", \"reviewId\": \"$input.params('reviewId')\"}"
+            }
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: |
+                #set($output = $util.parseJson($input.path('$.output')))
+                $output
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ApproveOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref ApproveResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # ---------------------------------------------------------------
+  # Resources: /reviews/{reviewId}/reject
+  # ---------------------------------------------------------------
+  RejectResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DedupApi
+      ParentId: !Ref ReviewIdResource
+      PathPart: reject
+
+  RejectPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref RejectResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.reviewId: true
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:states:action/StartSyncExecution'
+        Credentials: !Ref ApiGatewayRoleArn
+        RequestTemplates:
+          application/json: !Sub |
+            {
+              "stateMachineArn": "${RealtimeStateMachineArn}",
+              "input": "{\"action\": \"reject\", \"reviewId\": \"$input.params('reviewId')\"}"
+            }
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: |
+                #set($output = $util.parseJson($input.path('$.output')))
+                $output
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  RejectOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DedupApi
+      ResourceId: !Ref RejectResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # ---------------------------------------------------------------
+  # Deployment and Stage
+  # ---------------------------------------------------------------
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - RegisterPost
+      - ReviewsGet
+      - ReviewIdGet
+      - ApprovePost
+      - RejectPost
+    Properties:
+      RestApiId: !Ref DedupApi
+
+  ProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref DedupApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+      MethodSettings:
+        - HttpMethod: '*'
+          ResourcePath: '/*'
+          ThrottlingBurstLimit: 50
+          ThrottlingRateLimit: 20
+
+  # ---------------------------------------------------------------
+  # Lambda Permission for API Gateway
+  # ---------------------------------------------------------------
+  GetReviewsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetReviewsLambdaArn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DedupApi}/*'
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the Dedup REST API
+    Value: !Sub 'https://${DedupApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+
+  ApiKeyId:
+    Description: ID of the API key (retrieve value via AWS CLI)
+    Value: !Ref DedupApiKey
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiKeyId'
+
+  RestApiId:
+    Description: REST API ID
+    Value: !Ref DedupApi
+    Export:
+      Name: !Sub '${AWS::StackName}-RestApiId'
