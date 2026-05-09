@@ -3,19 +3,25 @@ Here's everything you need to get this running from scratch:
 
 Step 1: Clone the repo
 git clone https://github.com/gurup7/agentdedup-dashboard.git
+
 cd agentdedup-dashboard
+
 Step 2: Configure AWS credentials
 aws configure
 # Enter: Access Key, Secret Key, Region (us-east-1), Output (json)
+
 Step 3: Seed demo data
 pip install boto3 requests
 python scripts/demo-reset.py
+
 Step 4: Start the dashboard
 cd dashboard
 pip install -r requirements.txt
 streamlit run app.py
+
 Step 5: Open browser
 http://localhost:8501
+
 Step 6: Follow the demo cheat sheet
 Open DEMO-CHEATSHEET.md and follow the 5 scenarios.
 
