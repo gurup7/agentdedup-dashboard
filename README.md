@@ -8,7 +8,8 @@ cd agentdedup-dashboard
 
 Step 2: Configure AWS credentials
 aws configure
-# Enter: Access Key, Secret Key, Region (us-east-1), Output (json)
+
+Enter: Access Key, Secret Key, Region (us-east-1), Output (json)
 
 Step 3: Seed demo data
 pip install boto3 requests
